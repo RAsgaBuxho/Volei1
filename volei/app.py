@@ -11,7 +11,19 @@ from score import registrar_check_in_confirmado, registrar_entrada_fila, listar_
 from controle import get_status, criar_lista, fechar_lista
 from usuarios import obter_usuario, listar_usuarios, atualizar_usuario, obter_total_usuarios
 from authadmin import is_admin
-from qrcode_checkin import gerar_qrcode_checkin, fazer_checkin_por_qrcode
+
+# Importar QR Code com fallback
+try:
+    from qrcode_checkin import gerar_qrcode_checkin, fazer_checkin_por_qrcode
+    QRCODE_DISPONIVEL = True
+except ImportError as e:
+    print(f"⚠️ Módulo QR Code não disponível: {e}")
+    QRCODE_DISPONIVEL = False
+    # Criar funções dummy
+    def gerar_qrcode_checkin(dia):
+        return {"sucesso": False, "erro": "QR Code não configurado"}
+    def fazer_checkin_por_qrcode(user_id, token, dia):
+        return {"sucesso": False, "erro": "QR Code não configurado"}
 
 
 # =========================
@@ -42,6 +54,9 @@ if "limpeza_feita" not in st.session_state:
         st.session_state.limpeza_feita = True
     except:
         pass  # Silencioso se houver erro
+
+if "nome_usuario" not in st.session_state:
+    st.session_state.nome_usuario = None
 
 
 # =========================
@@ -79,6 +94,18 @@ if not st.session_state.user:
                     user = user.user
 
                 st.session_state.user = user
+                
+                # Recuperar nome do usuário do banco
+                try:
+                    meu_perfil = obter_usuario(user.id)
+                    if meu_perfil and meu_perfil.get('nome'):
+                        st.session_state.nome_usuario = meu_perfil['nome']
+                    else:
+                        # Fallback: usar email se nome não existir
+                        st.session_state.nome_usuario = getattr(user, "email", "Usuário")
+                except:
+                    st.session_state.nome_usuario = getattr(user, "email", "Usuário")
+                
                 st.success("✅ Login realizado com sucesso!")
                 st.rerun()
             else:
@@ -97,6 +124,7 @@ if not st.session_state.user:
 # =========================
 user = st.session_state.user
 email_user = getattr(user, "email", "Sem email")
+nome_usuario = st.session_state.nome_usuario or email_user.split('@')[0]  # Fallback para parte antes do @
 
 col_top1, col_top2, col_top3 = st.columns([3, 1, 1])
 
@@ -111,7 +139,7 @@ with col_top1:
         font-weight: 700;
         font-size: 1.1em;
     ">
-        ✅ Logado como: <span style="color: #ffd60a;">{email_user}</span>
+        ✅ Logado como: <span style="color: #ffd60a;">{nome_usuario}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -262,31 +290,34 @@ is_admin_user = is_admin(user.id)
 
 # ========== ADMIN: GERAR QR CODE ==========
 if is_admin_user:
-    with st.expander("🔐 ADMIN - Gerar QR Code para Check-in", expanded=False):
-        st.info("ℹ️ Gere um QR Code para que os usuários façam check-in escaneando")
-        
-        if st.button("📱 GERAR QR CODE PARA ESTE DIA", use_container_width=True, key="gerar_qr"):
-            resultado = gerar_qrcode_checkin(dia.split()[0])
+    if QRCODE_DISPONIVEL:
+        with st.expander("🔐 ADMIN - Gerar QR Code para Check-in", expanded=False):
+            st.info("ℹ️ Gere um QR Code para que os usuários façam check-in escaneando")
             
-            if resultado.get("sucesso"):
-                st.markdown(f"""
-                <div style="
-                    background: linear-gradient(135deg, rgba(6, 168, 125, 0.3), rgba(0, 212, 170, 0.1));
-                    border: 2px solid #06a87d;
-                    border-radius: 15px;
-                    padding: 15px;
-                    text-align: center;
-                ">
-                    <div style="color: #06a87d; font-weight: 900; margin-bottom: 10px;">✅ QR Code Gerado!</div>
-                    <div style="font-size: 0.9em; color: #00d4aa;">Token: <code>{resultado.get('token')}</code></div>
-                    <div style="font-size: 0.85em; color: #e39a03; margin-top: 8px;">Compartilhe este QR code com os jogadores</div>
-                </div>
-                """, unsafe_allow_html=True)
+            if st.button("📱 GERAR QR CODE PARA ESTE DIA", use_container_width=True, key="gerar_qr"):
+                resultado = gerar_qrcode_checkin(dia.split()[0])
                 
-                # Exibir QR Code
-                st.image(resultado.get("img_bytes"), width=300, caption="Escaneie para fazer check-in")
-            else:
-                st.error(f"❌ Erro ao gerar QR Code: {resultado.get('erro', 'Desconhecido')}")
+                if resultado.get("sucesso"):
+                    st.markdown(f"""
+                    <div style="
+                        background: linear-gradient(135deg, rgba(6, 168, 125, 0.3), rgba(0, 212, 170, 0.1));
+                        border: 2px solid #06a87d;
+                        border-radius: 15px;
+                        padding: 15px;
+                        text-align: center;
+                    ">
+                        <div style="color: #06a87d; font-weight: 900; margin-bottom: 10px;">✅ QR Code Gerado!</div>
+                        <div style="font-size: 0.9em; color: #00d4aa;">Token: <code>{resultado.get('token')}</code></div>
+                        <div style="font-size: 0.85em; color: #e39a03; margin-top: 8px;">Compartilhe este QR code com os jogadores</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Exibir QR Code
+                    st.image(resultado.get("img_bytes"), width=300, caption="Escaneie para fazer check-in")
+                else:
+                    st.error(f"❌ Erro ao gerar QR Code: {resultado.get('erro', 'Desconhecido')}")
+    else:
+        st.info("ℹ️ Sistema de QR Code não disponível neste momento")
 
 st.divider()
 
@@ -301,32 +332,35 @@ with col_checkin_auto:
 
 # Coluna 2: Check-in via QR Code
 with col_checkin_qr:
-    st.markdown("**Opção 2: Escanear QR Code**")
-    st.markdown("Se a geolocalização não funcionar, o admin pode gerar um QR Code")
-    
-    if st.button("📱 ESCANEAR QR CODE", use_container_width=True, key="escanear_qr"):
-        st.session_state.modo_qr = True
-    
-    if st.session_state.get("modo_qr"):
-        st.info("📱 Abra a câmera do telefone ou use um leitor de QR Code")
-        st.warning("⚠️ Funcionalidade em desenvolvimento - entre em contato com o admin")
+    if QRCODE_DISPONIVEL:
+        st.markdown("**Opção 2: Escanear QR Code**")
+        st.markdown("Se a geolocalização não funcionar, o admin pode gerar um QR Code")
         
-        # Campo para inserir manualmente o token (fallback)
-        token_manual = st.text_input("Ou cole o token manualmente:", key="token_qr_input")
+        if st.button("📱 ESCANEAR QR CODE", use_container_width=True, key="escanear_qr"):
+            st.session_state.modo_qr = True
         
-        if st.button("✅ CONFIRMAR CHECK-IN COM TOKEN", use_container_width=True):
-            if token_manual:
-                resultado = fazer_checkin_por_qrcode(user.id, token_manual, dia.split()[0])
-                
-                if resultado.get("sucesso"):
-                    st.success("✅ Check-in realizado com sucesso!")
-                    st.balloons()
-                    time.sleep(2)
-                    st.rerun()
+        if st.session_state.get("modo_qr"):
+            st.info("📱 Abra a câmera do telefone ou use um leitor de QR Code")
+            st.warning("⚠️ Funcionalidade em desenvolvimento - entre em contato com o admin")
+            
+            # Campo para inserir manualmente o token (fallback)
+            token_manual = st.text_input("Ou cole o token manualmente:", key="token_qr_input")
+            
+            if st.button("✅ CONFIRMAR CHECK-IN COM TOKEN", use_container_width=True):
+                if token_manual:
+                    resultado = fazer_checkin_por_qrcode(user.id, token_manual, dia.split()[0])
+                    
+                    if resultado.get("sucesso"):
+                        st.success("✅ Check-in realizado com sucesso!")
+                        st.balloons()
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {resultado.get('erro', 'Erro desconhecido')}")
                 else:
-                    st.error(f"❌ {resultado.get('erro', 'Erro desconhecido')}")
-            else:
-                st.warning("⚠️ Digite o token recebido do admin")
+                    st.warning("⚠️ Digite o token recebido do admin")
+    else:
+        st.info("ℹ️ Sistema de QR Code não disponível neste momento")
 
 st.divider()
 
@@ -394,7 +428,7 @@ with col2:
     dia_acao = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
     st.caption(f"Preparando para: {dia_acao}")
 
-    nome_escolhido = st.text_input("🎯 Seu nome na lista")
+    nome_escolhido = st.text_input("🎯 Seu nome na lista", value=nome_usuario)
     
     # Pergunta se é levantador
     eh_levantador = st.checkbox("🤚 Sou levantador/levantadora")
