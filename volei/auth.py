@@ -85,36 +85,51 @@ def signup(email, senha, nome=None):
                 user_check = supabase.table("usuarios").select("*").eq("id", res.user.id).execute()
                 if user_check.data and len(user_check.data) > 0:
                     print(f"✅ Registro de usuário criado no banco: {email}")
+                    st.success("✅ Conta criada e salva no banco de dados!")
                     return True
                 else:
                     print(f"⚠️  Usuário criado mas registro em 'usuarios' não foi criado pelo trigger. Inserindo manualmente...")
-                    # Inserir manualmente se o trigger não funcionar
+                    with st.spinner("📝 Salvando dados no banco..."):
+                        # Inserir manualmente se o trigger não funcionar
+                        try:
+                            result = supabase.table("usuarios").insert({
+                                "id": str(res.user.id),
+                                "email": email,
+                                "nome": nome
+                            }).execute()
+                            print(f"✅ Registro de usuário inserido manualmente: {email}")
+                            
+                            # Verificar se foi realmente inserido
+                            verify = supabase.table("usuarios").select("*").eq("id", str(res.user.id)).execute()
+                            if verify.data and len(verify.data) > 0:
+                                print(f"✅ Verificação OK: Usuário {email} está no banco!")
+                                st.success("✅ Conta criada e salva no banco de dados!")
+                                return True
+                            else:
+                                print(f"❌ Inserção falhou: Usuário {email} não encontrado no banco!")
+                                st.error("❌ Erro ao salvar dados do usuário no banco")
+                                return False
+                        except Exception as insert_error:
+                            print(f"❌ Erro ao inserir usuário manualmente: {insert_error}")
+                            st.error(f"❌ Erro ao salvar dados: {str(insert_error)[:100]}")
+                            return False
+            except Exception as check_error:
+                print(f"⚠️  Erro ao verificar registro: {check_error}")
+                # Tentar inserir mesmo assim
+                with st.spinner("📝 Salvando dados no banco..."):
                     try:
-                        supabase.table("usuarios").insert({
-                            "id": res.user.id,
+                        result = supabase.table("usuarios").insert({
+                            "id": str(res.user.id),
                             "email": email,
                             "nome": nome
                         }).execute()
                         print(f"✅ Registro de usuário inserido manualmente: {email}")
+                        st.success("✅ Conta criada e salva no banco de dados!")
                         return True
                     except Exception as insert_error:
                         print(f"❌ Erro ao inserir usuário manualmente: {insert_error}")
-                        st.error("❌ Erro ao salvar dados do usuário no banco")
+                        st.error(f"❌ Erro ao salvar dados: {str(insert_error)[:100]}")
                         return False
-            except Exception as check_error:
-                print(f"⚠️  Erro ao verificar registro: {check_error}")
-                # Tentar inserir mesmo assim
-                try:
-                    supabase.table("usuarios").insert({
-                        "id": res.user.id,
-                        "email": email,
-                        "nome": nome
-                    }).execute()
-                    print(f"✅ Registro de usuário inserido manualmente: {email}")
-                    return True
-                except Exception as insert_error:
-                    print(f"❌ Erro ao inserir usuário manualmente: {insert_error}")
-                    return False
             
             return True
         else:

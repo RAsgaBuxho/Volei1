@@ -62,7 +62,39 @@ if "nome_usuario" not in st.session_state:
 # =========================
 # HEADER
 # =========================
-st.title("🏐 GERENCIADOR DE VÔLEI 🏐")
+import os
+
+# Tentar carregar e exibir o escudo
+escudo_path = "volei/assets/escudo_vila_linda.png"
+aguia_path = "volei/assets/aguia_volei.png"
+
+escudo_existe = os.path.exists(escudo_path)
+aguia_existe = os.path.exists(aguia_path)
+
+# Header com imagem
+col_header_left, col_header_center, col_header_right = st.columns([1, 2, 1])
+
+if escudo_existe:
+    with col_header_left:
+        st.image(escudo_path, width=150)
+
+with col_header_center:
+    st.markdown("""
+    <div style="text-align: center; margin-top: 10px;">
+        <h1 style="color: #ffd60a; text-shadow: 0 0 20px rgba(255, 214, 10, 0.4); margin: 0;">
+            🏐 ESQUADRÃO DO VÓLEI 🏐
+        </h1>
+        <p style="color: #00d4aa; font-size: 1.3em; font-weight: bold; margin: 5px 0;">
+            VILA LINDA
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+if escudo_existe:
+    with col_header_right:
+        st.image(escudo_path, width=150)
+
+st.markdown("---")
 
 
 # =========================
@@ -121,8 +153,13 @@ if not st.session_state.user:
             if not nome:
                 st.error("❌ Por favor, preencha seu nome completo!")
             else:
-                signup(email, senha, nome)
-                st.success("🎉 Conta criada com sucesso! Agora faça login!")
+                resultado = signup(email, senha, nome)
+                if resultado:
+                    st.success("🎉 Conta criada com sucesso! Agora faça login!")
+                    # Aguardar um pouco e depois fazer rerun para voltar ao login
+                    time.sleep(1)
+                else:
+                    st.error("❌ Falha ao criar a conta. Verifique os dados e tente novamente.")
 
     st.stop()
 
@@ -157,68 +194,65 @@ with col_top3:
         st.session_state.user = None
         st.rerun()
 
-# Debug: Verificar se usuário é admin
-with st.expander("🔍 Debug - Verificar Status Admin"):
-    user_id_str = str(user.id) if user else "Sem user"
-    is_admin_user = is_admin(user.id) if user else False
-    st.write(f"**Email:** {email_user}")
-    st.write(f"**User ID:** {user_id_str}")
-    st.write(f"**É Admin?** {is_admin_user}")
-    if not is_admin_user:
-        st.error("❌ Você não está registrado como admin!")
-        st.markdown("""
-        ### Como se tornar Admin:
-        
-        1. **Copie seu User ID acima** (o UUID mostrado em **User ID**)
-        2. **Abra o Supabase** e vá para **SQL Editor**
-        3. **Execute este comando:**
-        ```sql
-        INSERT INTO roles (user_id, role) VALUES ('COLE_SEU_USER_ID_AQUI', 'admin');
-        ```
-        4. **Volte aqui e atualize** (F5 ou Ctrl+R)
-        5. ✅ Você verá "É Admin? True"
-        """)
+# Debug: Verificar se usuário é admin (APENAS PARA ADMINS)
+is_admin_user = is_admin(user.id) if user else False
 
-# ⚠️ Aviso de Segurança
-with st.expander("🔒 SEGURANÇA DO BANCO DE DADOS"):
-    st.warning("⚠️ **IMPORTANTE**: Seu banco de dados deve estar protegido com Row Level Security (RLS)")
-    
-    st.markdown("""
-    ### 🚨 O que Pode Acontecer SEM Proteção?
-    - ❌ Qualquer um na internet pode ver TODOS os dados
-    - ❌ Roubar informações pessoais dos usuários
-    - ❌ Editar ou deletar dados
-    - ❌ Sabotage completa do sistema
-    
-    ### ✅ Como Proteger (3 passos rápidos)
-    
-    1. **Abra o arquivo** `SETUP_SEGURANCA_RLS.sql`
-    2. **Copie TODO o conteúdo**
-    3. **Cole no Supabase → SQL Editor**
-    4. **Clique RUN** ▶️
-    
-    ### ✔️ Verificar se Está Protegido
-    
-    No Supabase → **Table Editor**:
-    - Selecione uma tabela (ex: `fila`)
-    - Vá em **Policies**
-    - Se ver múltiplas políticas → ✅ Protegido!
-    - Se estiver vazio → ❌ NÃO protegido!
-    
-    ### 📚 Documentação Completa
-    
-    Leia [GUIA_SEGURANCA.md](GUIA_SEGURANCA.md) para:
-    - Explicação detalhada de cada política
-    - Matriz de permissões
-    - Testes de segurança
-    - Melhores práticas
-    """)
+if is_admin_user:
+    with st.expander("🔍 Debug - Verificar Status Admin"):
+        user_id_str = str(user.id) if user else "Sem user"
+        st.write(f"**Email:** {email_user}")
+        st.write(f"**User ID:** {user_id_str}")
+        st.write(f"**É Admin?** {is_admin_user}")
+        st.success("✅ Você é um administrador do sistema!")
+
+# ⚠️ Aviso de Segurança (APENAS PARA ADMINS)
+if is_admin_user:
+    with st.expander("🔒 SEGURANÇA DO BANCO DE DADOS"):
+        st.warning("⚠️ **IMPORTANTE**: Seu banco de dados deve estar protegido com Row Level Security (RLS)")
+        
+        st.markdown("""
+        ### 🚨 O que Pode Acontecer SEM Proteção?
+        - ❌ Qualquer um na internet pode ver TODOS os dados
+        - ❌ Roubar informações pessoais dos usuários
+        - ❌ Editar ou deletar dados
+        - ❌ Sabotage completa do sistema
+        
+        ### ✅ Como Proteger (3 passos rápidos)
+        
+        1. **Abra o arquivo** `SETUP_SEGURANCA_RLS.sql`
+        2. **Copie TODO o conteúdo**
+        3. **Cole no Supabase → SQL Editor**
+        4. **Clique RUN** ▶️
+        
+        ### ✔️ Verificar se Está Protegido
+        
+        No Supabase → **Table Editor**:
+        - Selecione uma tabela (ex: `fila`)
+        - Vá em **Policies**
+        - Se ver múltiplas políticas → ✅ Protegido!
+        - Se estiver vazio → ❌ NÃO protegido!
+        
+        ### 📚 Documentação Completa
+        
+        Leia [GUIA_SEGURANCA.md](GUIA_SEGURANCA.md) para:
+        - Explicação detalhada de cada política
+        - Matriz de permissões
+        - Testes de segurança
+        - Melhores práticas
+        """)
 
 
 # =========================
 # PERFIL DO USUÁRIO
 # =========================
 st.markdown("---")
+
+# Adicionar escudo antes do perfil
+if escudo_existe:
+    col_esc1, col_esc2, col_esc3 = st.columns([1, 1, 1])
+    with col_esc2:
+        st.image(escudo_path, width=250)
+
 st.subheader("👤 MEU PERFIL 👤")
 
 try:
@@ -407,6 +441,10 @@ col1, col2 = st.columns(2)
 # LISTA DE CONVOCAÇÃO
 # =========================/
 with col1:
+    # Adicionar imagem da águia no topo
+    if aguia_existe:
+        st.image(aguia_path, width=280, use_column_width=False)
+    
     dia_display = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
     limite_display = "18" if dia.split()[0] == "quinta" else "24"
     st.subheader(f"📋 LISTA DE CONVOCAÇÃO {dia_display} 📋")
@@ -431,6 +469,10 @@ with col1:
 # AÇÕES - INSCREVER
 # =========================
 with col2:
+    # Adicionar imagem da águia no topo
+    if aguia_existe:
+        st.image(aguia_path, width=300, use_column_width=False)
+    
     st.subheader("✍️ INSCREVER-SE NA LISTA ✍️")
     
     dia_acao = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
