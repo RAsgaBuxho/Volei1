@@ -65,8 +65,8 @@ if "nome_usuario" not in st.session_state:
 import os
 
 # Tentar carregar e exibir o escudo
-escudo_path = "volei/assets/Escudo vila linda.jpeg"
-aguia_path = "volei/assets/aguia do volei.jpeg"
+escudo_path = "volei/assets/Escudo vila linda.png"
+aguia_path = "volei/assets/aguia do volei.png"
 
 escudo_existe = os.path.exists(escudo_path)
 aguia_existe = os.path.exists(aguia_path)
