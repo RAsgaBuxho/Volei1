@@ -65,8 +65,8 @@ if "nome_usuario" not in st.session_state:
 import os
 
 # Tentar carregar e exibir o escudo
-escudo_path = "volei/assets/escudo_vila_linda.png"
-aguia_path = "volei/assets/aguia_volei.png"
+escudo_path = "volei/assets/Escudo vila linda.jpeg"
+aguia_path = "volei/assets/aguia do volei.jpeg"
 
 escudo_existe = os.path.exists(escudo_path)
 aguia_existe = os.path.exists(aguia_path)
@@ -674,25 +674,6 @@ if is_admin_user:
     st.divider()
 
 # =========================
-# SORTEIO DE TIMES
-# =========================
-st.markdown("---")
-st.subheader("🎲 SORTEIO DE TIMES 🎲")
-
-dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-st.markdown(f"**Sorteios para: {dia_titulo}**")
-
-col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
-
-with col_sorteio2:
-    if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear"):
-        try:
-            st.session_state.times = gerar_times(dia)
-            st.balloons()
-        except Exception as e:
-            st.error(f"❌ Erro ao gerar times: {e}")
-
-# =========================
 # EXIBIR TIMES
 # =========================
 if st.session_state.times:
@@ -760,89 +741,26 @@ if is_admin(user.id):
                 st.info("Nenhum usuário cadastrado ainda")
     except Exception as e:
         st.warning(f"⚠️ Erro ao carregar usuários: {e}\n\nExecute SETUP_USUARIOS.sql no Supabase")
-
-
-# =========================
-# RANKING & SCORE
-# =========================
-st.divider()
-st.subheader("🏆 RANKING DE CONFIABILIDADE 🏆")
-
-st.markdown("""
-**Ranking baseado em:**
-- ✅ Check-ins confirmados
-- 📊 Taxa de presença (check-ins / entradas na fila)
-- 🎯 Atividade recente
-
-**Objetivo:** Valorizar quem entra na fila E realmente comparece!
-""")
-
-ranking = listar_ranking(limite=10)
-
-if ranking:
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("🥇 Melhor Score", f"{ranking[0]['score']} pts", f"{ranking[0]['nome']}", delta_color="off")
-    
-    with col2:
-        if len(ranking) > 1:
-            st.metric("🥈 2º Lugar", f"{ranking[1]['score']} pts", f"{ranking[1]['nome']}", delta_color="off")
-        else:
-            st.metric("🥈 2º Lugar", "---", delta_color="off")
-    
-    with col3:
-        if len(ranking) > 2:
-            st.metric("🥉 3º Lugar", f"{ranking[2]['score']} pts", f"{ranking[2]['nome']}", delta_color="off")
-        else:
-            st.metric("🥉 3º Lugar", "---", delta_color="off")
     
     st.divider()
     
-    st.markdown("**📋 TOP 10 RANKING:**")
+    # =========================
+    # SORTEIO DE TIMES (APENAS ADMIN)
+    # =========================
+    st.subheader("🎲 SORTEIO DE TIMES 🎲")
     
-    for i, jogador in enumerate(ranking[:10], 1):
-        medalha = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}️⃣ "
-        
-        col_rank1, col_rank2, col_rank3, col_rank4, col_rank5 = st.columns([0.5, 2, 1.5, 1.5, 1])
-        
-        with col_rank1:
-            st.markdown(f"**{medalha}**")
-        
-        with col_rank2:
-            st.markdown(f"**{jogador['nome']}**")
-        
-        with col_rank3:
-            st.markdown(f"✅ {jogador['check_ins']} check-ins")
-        
-        with col_rank4:
-            st.markdown(f"📊 {jogador['taxa_presenca']:.0f}% presença")
-        
-        with col_rank5:
-            st.markdown(f"⭐ {jogador['score']} pts", help="Score total")
-else:
-    st.info("📈 Nenhum jogador com score ainda. Comece a jogar e fazer check-ins!")
-
-st.divider()
-
-# =========================
-# SORTEIO DE TIMES
-# =========================
-st.markdown("---")
-st.subheader("🎲 SORTEIO DE TIMES 🎲")
-
-dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-st.markdown(f"**Sorteios para: {dia_titulo}**")
-
-col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
-
-with col_sorteio2:
-    if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear"):
-        try:
-            st.session_state.times = gerar_times(dia)
-            st.balloons()
-        except Exception as e:
-            st.error(f"❌ Erro ao gerar times: {e}")
+    dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
+    st.markdown(f"**Sorteios para: {dia_titulo}**")
+    
+    col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
+    
+    with col_sorteio2:
+        if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear_admin"):
+            try:
+                st.session_state.times = gerar_times(dia)
+                st.balloons()
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar times: {e}")
 
 # =========================
 # EXIBIR TIMES
