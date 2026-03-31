@@ -83,6 +83,11 @@ if not st.session_state.user:
 
     email = st.text_input("📧 Email")
     senha = st.text_input("🔑 Senha", type="password")
+    
+    # Campo de nome só aparece na aba CADASTRO
+    nome = ""
+    if aba == "📝 CADASTRO":
+        nome = st.text_input("👤 Nome Completo")
 
     if aba == "🔐 LOGIN":
         if st.button("🎯 ENTRAR"):
@@ -113,8 +118,11 @@ if not st.session_state.user:
 
     else:
         if st.button("✅ CRIAR CONTA"):
-            signup(email, senha)
-            st.success("🎉 Conta criada com sucesso! Agora faça login!")
+            if not nome:
+                st.error("❌ Por favor, preencha seu nome completo!")
+            else:
+                signup(email, senha, nome)
+                st.success("🎉 Conta criada com sucesso! Agora faça login!")
 
     st.stop()
 

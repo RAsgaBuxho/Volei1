@@ -44,7 +44,7 @@ def login(email, senha):
         
         return None
 
-def signup(email, senha):
+def signup(email, senha, nome=None):
     """
     Cria uma nova conta de usuário
     """
@@ -53,18 +53,22 @@ def signup(email, senha):
             st.error("❌ Email e senha são obrigatórios!")
             return False
         
+        if not nome:
+            st.error("❌ Nome é obrigatório!")
+            return False
+        
         if len(senha) < 6:
             st.error("❌ Senha deve ter pelo menos 6 caracteres")
             return False
             
-        print(f"📝 Tentando criar conta para: {email}")
+        print(f"📝 Tentando criar conta para: {email} com nome: {nome}")
         
         res = supabase.auth.sign_up({
             "email": email,
             "password": senha,
             "options": {
                 "data": {
-                    "nome": email.split('@')[0]  # Nome padrão = parte antes do @
+                    "nome": nome  # Nome fornecido pelo usuário
                 }
             }
         })
@@ -81,10 +85,36 @@ def signup(email, senha):
                 user_check = supabase.table("usuarios").select("*").eq("id", res.user.id).execute()
                 if user_check.data and len(user_check.data) > 0:
                     print(f"✅ Registro de usuário criado no banco: {email}")
+                    return True
                 else:
-                    print(f"⚠️  Usuário criado mas registro em 'usuarios' ainda não foi criado")
+                    print(f"⚠️  Usuário criado mas registro em 'usuarios' não foi criado pelo trigger. Inserindo manualmente...")
+                    # Inserir manualmente se o trigger não funcionar
+                    try:
+                        supabase.table("usuarios").insert({
+                            "id": res.user.id,
+                            "email": email,
+                            "nome": nome
+                        }).execute()
+                        print(f"✅ Registro de usuário inserido manualmente: {email}")
+                        return True
+                    except Exception as insert_error:
+                        print(f"❌ Erro ao inserir usuário manualmente: {insert_error}")
+                        st.error("❌ Erro ao salvar dados do usuário no banco")
+                        return False
             except Exception as check_error:
-                print(f"⚠️  Não foi possível verificar registro em usuarios: {check_error}")
+                print(f"⚠️  Erro ao verificar registro: {check_error}")
+                # Tentar inserir mesmo assim
+                try:
+                    supabase.table("usuarios").insert({
+                        "id": res.user.id,
+                        "email": email,
+                        "nome": nome
+                    }).execute()
+                    print(f"✅ Registro de usuário inserido manualmente: {email}")
+                    return True
+                except Exception as insert_error:
+                    print(f"❌ Erro ao inserir usuário manualmente: {insert_error}")
+                    return False
             
             return True
         else:
