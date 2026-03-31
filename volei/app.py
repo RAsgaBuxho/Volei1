@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 
 from auth import login, signup, logout
 from fila import entrar_fila, listar_fila, sair_fila, limpar_fila, limpar_fila_antigas, contar_fila
@@ -10,6 +11,7 @@ from score import registrar_check_in_confirmado, registrar_entrada_fila, listar_
 from controle import get_status, criar_lista, fechar_lista
 from usuarios import obter_usuario, listar_usuarios, atualizar_usuario, obter_total_usuarios
 from authadmin import is_admin
+from qrcode_checkin import gerar_qrcode_checkin, fazer_checkin_por_qrcode
 
 
 # =========================
@@ -62,7 +64,7 @@ if not st.session_state.user:
     </div>
     """, unsafe_allow_html=True)
     
-    aba = st.radio("", ["🔐 LOGIN", "📝 CADASTRO"], horizontal=True)
+    aba = st.radio("Opção", ["🔐 LOGIN", "📝 CADASTRO"], horizontal=True, label_visibility="collapsed")
 
     email = st.text_input("📧 Email")
     senha = st.text_input("🔑 Senha", type="password")
@@ -220,51 +222,16 @@ except Exception as e:
 
 
 # =========================
-# FAMILIA
+# SEÇÕES REORGANIZADAS - VER ABAIXO
 # =========================
-st.markdown("---")
-st.subheader("👨‍👩‍👧‍👦 GERENCIAR FAMÍLIA 👨‍👩‍👧‍👦")
 
-familia_list = listar_familia(user.id).data if listar_familia(user.id).data else []
-max_familia = float('inf') if is_admin(user.id) else 2
-
-col_fam1, col_fam2 = st.columns(2)
-
-with col_fam1:
-    st.markdown(f"**Membros da família: {len(familia_list)}/{int(max_familia) if max_familia != float('inf') else '∞'}**")
-    
-    if familia_list:
-        for membro in familia_list:
-            st.write(f"👤 {membro['nome']} ({membro['idade']} anos) - Responsável: {membro['responsavel_nome']}")
-    else:
-        st.info("Nenhum membro da família registrado")
-
-with col_fam2:
-    if len(familia_list) < max_familia:
-        st.markdown("**Adicionar novo membro:**")
-        nome_fam = st.text_input("Nome", key="nome_fam")
-        idade_fam = st.number_input("Idade", min_value=1, max_value=120, key="idade_fam")
-        responsavel_fam = st.text_input("Responsável", key="responsavel_fam")
-        termo_fam = st.checkbox("Aceito o termo")
-        
-        if st.button("➕ ADICIONAR MEMBRO", use_container_width=True):
-            if nome_fam and responsavel_fam:
-                try:
-                    adicionar_familia(user.id, nome_fam, idade_fam, responsavel_fam, termo_fam)
-                    st.success("✅ Membro adicionado com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao adicionar: {e}")
-            else:
-                st.warning("⚠️ Preencha todos os campos!")
-    else:
-        st.warning(f"⚠️ Limite de {int(max_familia)} membros atingido!")
 
 
 # =========================
 # DIA CORRETO - CARREGA PRIMEIRO
 # =========================
-st.markdown("**📅 Qual dia você quer?**")
+st.markdown("---")
+st.subheader("📅 SELECIONE O DIA")
 dia = st.selectbox("", ["terça-feira 🔴", "quinta-feira 🔵 REI DA QUADRA"], label_visibility="collapsed")
 
 # =========================
@@ -275,197 +242,117 @@ status_lista_atual = get_status(dia_key)
 
 # Mostra status visual
 if status_lista_atual is None:
-    st.warning("⚠️ A lista para este dia ainda não foi criada.")
+    st.warning("⚠️ A lista para este dia ainda não foi criada por um administrador.")
 elif status_lista_atual:
-    st.success("✅ Lista aberta! Você pode entrar na fila.")
+    st.success("✅ A lista está ABERTA! Você pode se inscrever na lista de convocação.")
 else:
-    st.error("🔒 Lista fechada. Não há mais vagas.")
+    st.error("🔒 A lista está FECHADA. Não há mais vagas disponíveis.")
 
 st.divider()
-
-# Banner que monitora dados em localStorage
-st.markdown("""
-<script>
-// Monitora continuamente se há dados de geolocalização
-function monitorarGeolocation() {
-    const lat = localStorage.getItem('latitude');
-    const lon = localStorage.getItem('longitude');
-    
-    if (lat && lon) {
-        // Dados foram capturados - Streamlit vai detectar
-        const div = document.createElement('div');
-        div.style.cssText = `
-            position: fixed;
-            top: 60px;
-            right: 10px;
-            background: linear-gradient(135deg, #06a87d, #00d4aa);
-            border: 2px solid #06a87d;
-            border-radius: 10px;
-            padding: 15px;
-            color: white;
-            font-weight: 700;
-            z-index: 10000;
-            box-shadow: 0 5px 20px rgba(6, 168, 125, 0.4);
-            animation: slideIn 0.5s ease;
-        `;
-        div.innerHTML = `
-            <div style="font-size: 0.9em;">✅ Dados capturados!</div>
-            <div style="font-size: 0.8em; margin-top: 5px;">📍 Processando localização...</div>
-        `;
-        document.body.appendChild(div);
-        
-        console.log("✅ Localização capturada: ", lat, lon);
-    }
-}
-
-// Verifica a cada 500ms
-setInterval(monitorarGeolocation, 500);
-</script>
-""", unsafe_allow_html=True)
-
-# Aviso visual se detectar dados de geolocalização pendentes
-st.markdown("""
-<script>
-if (localStorage.getItem('latitude') && localStorage.getItem('longitude')) {
-    console.log("✅ Dados de geolocalização detectados!");
-    const lat = localStorage.getItem('latitude');
-    const lon = localStorage.getItem('longitude');
-    console.log("Lat:", lat, "Lon:", lon);
-}
-</script>
-""", unsafe_allow_html=True)
-
 
 # =========================
 # CHECK-IN
 # =========================
 st.markdown("---")
 st.subheader("📍 CHECK-IN DE CHEGADA 📍")
+st.caption("Registre sua chegada para confirmar sua presença")
 
-col_checkin1, col_checkin2 = st.columns(2)
+# Verificar se é admin
+is_admin_user = is_admin(user.id)
 
-with col_checkin1:
-    st.markdown("**Clique no botão para registrar sua chegada com localização**")
-    botao_check_in()
-    
-    # Script que monitora localStorage e preenche os campos automaticamente
-    st.markdown("""
-    <script>
-    // Função para preencher campos quando localização é capturada
-    function verificarLocalizacaoCapturada() {
-        const latitude = localStorage.getItem('latitude');
-        const longitude = localStorage.getItem('longitude');
+# ========== ADMIN: GERAR QR CODE ==========
+if is_admin_user:
+    with st.expander("🔐 ADMIN - Gerar QR Code para Check-in", expanded=False):
+        st.info("ℹ️ Gere um QR Code para que os usuários façam check-in escaneando")
         
-        if (latitude && longitude) {
-            console.log("🎯 Localização capturada detectada!");
-            console.log("Latitude:", latitude);
-            console.log("Longitude:", longitude);
+        if st.button("📱 GERAR QR CODE PARA ESTE DIA", use_container_width=True, key="gerar_qr"):
+            resultado = gerar_qrcode_checkin(dia.split()[0])
             
-            // Streamlit vai detectar automaticamente
-            // Aqui apenas confirmamos que temos os dados
-        }
-    }
-    
-    // Verifica ao carregar e periodicamente
-    verificarLocalizacaoCapturada();
-    setInterval(verificarLocalizacaoCapturada, 500);
-    </script>
-    """, unsafe_allow_html=True)
-
-with col_checkin2:
-    # Alternativa: Input manual (caso a geolocalização não funcione)
-    st.markdown("**Ou insira manualmente (alternativa):**")
-    
-    col_lat, col_lon = st.columns(2)
-    with col_lat:
-        lat_manual = st.number_input("Latitude", format="%.6f", min_value=-90.0, max_value=90.0, key="lat_input")
-    with col_lon:
-        lon_manual = st.number_input("Longitude", format="%.6f", min_value=-180.0, max_value=180.0, key="lon_input")
-    
-    if st.button("✅ CONFIRMAR CHECK-IN MANUAL", use_container_width=True):
-        if lat_manual != 0 and lon_manual != 0:
-            res = fazer_check_in(user.id, lat_manual, lon_manual, dia.split()[0])
-            if isinstance(res, dict) and res.get("error"):
-                st.error(f"❌ Erro: {res['error']}")
-            else:
-                # Exibe mensagem de sucesso com detalhes da localização
+            if resultado.get("sucesso"):
                 st.markdown(f"""
                 <div style="
                     background: linear-gradient(135deg, rgba(6, 168, 125, 0.3), rgba(0, 212, 170, 0.1));
-                    border: 3px solid #06a87d;
+                    border: 2px solid #06a87d;
                     border-radius: 15px;
-                    padding: 20px;
-                    color: white;
+                    padding: 15px;
                     text-align: center;
                 ">
-                    <div style="font-size: 2em; margin-bottom: 15px;">✅</div>
-                    <div style="font-size: 1.3em; font-weight: 900; color: #06a87d; margin-bottom: 15px;">Check-in Registrado com Sucesso!</div>
-                    <div style="background: rgba(0, 0, 0, 0.2); border-radius: 10px; padding: 15px; font-size: 0.95em;">
-                        <div style="margin: 8px 0;"><strong>📍 Latitude:</strong> {lat_manual:.6f}</div>
-                        <div style="margin: 8px 0;"><strong>📍 Longitude:</strong> {lon_manual:.6f}</div>
-                        <div style="margin: 8px 0;"><strong>🗓️ Dia:</strong> {dia}</div>
-                        <div style="margin: 8px 0;"><strong>⏰ Horário:</strong> Registrado em tempo real</div>
-                    </div>
-                    <div style="font-size: 0.9em; color: #00d4aa; margin-top: 15px;">✨ Você está confirmado para jogar!</div>
+                    <div style="color: #06a87d; font-weight: 900; margin-bottom: 10px;">✅ QR Code Gerado!</div>
+                    <div style="font-size: 0.9em; color: #00d4aa;">Token: <code>{resultado.get('token')}</code></div>
+                    <div style="font-size: 0.85em; color: #e39a03; margin-top: 8px;">Compartilhe este QR code com os jogadores</div>
                 </div>
                 """, unsafe_allow_html=True)
-                st.balloons()
                 
-                # Registra check-in confirmado para o score
-                try:
-                    registrar_check_in_confirmado(user.id, email_user, email_user, dia.split()[0])
-                except:
-                    pass  # Silencioso se não conseguir registrar score
+                # Exibir QR Code
+                st.image(resultado.get("img_bytes"), width=300, caption="Escaneie para fazer check-in")
+            else:
+                st.error(f"❌ Erro ao gerar QR Code: {resultado.get('erro', 'Desconhecido')}")
+
+st.divider()
+
+# ========== USUÁRIO: FAZER CHECK-IN ==========
+col_checkin_auto, col_checkin_qr = st.columns(2)
+
+# Coluna 1: Check-in Automático
+with col_checkin_auto:
+    st.markdown("**Opção 1: Automático com Geolocalização**")
+    st.markdown("Clique no botão para usar seu GPS:")
+    botao_check_in()
+
+# Coluna 2: Check-in via QR Code
+with col_checkin_qr:
+    st.markdown("**Opção 2: Escanear QR Code**")
+    st.markdown("Se a geolocalização não funcionar, o admin pode gerar um QR Code")
+    
+    if st.button("📱 ESCANEAR QR CODE", use_container_width=True, key="escanear_qr"):
+        st.session_state.modo_qr = True
+    
+    if st.session_state.get("modo_qr"):
+        st.info("📱 Abra a câmera do telefone ou use um leitor de QR Code")
+        st.warning("⚠️ Funcionalidade em desenvolvimento - entre em contato com o admin")
+        
+        # Campo para inserir manualmente o token (fallback)
+        token_manual = st.text_input("Ou cole o token manualmente:", key="token_qr_input")
+        
+        if st.button("✅ CONFIRMAR CHECK-IN COM TOKEN", use_container_width=True):
+            if token_manual:
+                resultado = fazer_checkin_por_qrcode(user.id, token_manual, dia.split()[0])
                 
-                st.session_state.checkin_feito = True
-                st.rerun()
-        else:
-            st.warning("⚠️ Insira latitude e longitude válidas")
-    
-    # Status monitor (debug)
-    with st.expander("🔍 DEBUG - Status da Geolocalização"):
-        st.markdown("""
-        <script>
-        // Monitora status do localStorage
-        function verificarStatus() {
-            const lat = localStorage.getItem('latitude');
-            const lon = localStorage.getItem('longitude');
-            const status = localStorage.getItem('geolocation_success');
-            
-            console.log("📊 STATUS:");
-            console.log("- Latitude:", lat);
-            console.log("- Longitude:", lon);
-            console.log("- Sucesso:", status);
-            console.log("- UserAgent:", navigator.userAgent);
-            console.log("- Geolocation suportada:", !!navigator.geolocation);
-        }
-        
-        verificarStatus();
-        console.log("✅ Script de debug carregado. Abra o Console (F12) para mais detalhes.");
-        </script>
-        """, unsafe_allow_html=True)
-        
-        st.info("💡 **Como debugar:**")
-        st.write("1. Abra o Console do navegador: **F12** ou **Ctrl+Shift+I**")
-        st.write("2. Clique no botão de geolocalização")
-        st.write("3. Veja as mensagens no console")
-        st.write("4. Se ver **'❌ Erro'**, mostre a mensagem")
-        st.write("5. Se estiver em HTTP (não HTTPS), use https://localhost:8501")
-    
-    # Exibe o check-in atual do usuário
-    check_in_atual = get_check_in_usuario(user.id, dia.split()[0])
-    
-    if check_in_atual:
-        hora_chegada = check_in_atual["hora_chegada"].split("T")[1][:5] if check_in_atual.get("hora_chegada") else "N/A"
-        st.markdown(f"""
-        <div class="card" style="background: linear-gradient(135deg, rgba(6, 168, 125, 0.3), rgba(0, 212, 170, 0.1));">
-            <div style="color: #00d4aa; font-weight: 900; margin-bottom: 10px;">✅ Você já fez check-in!</div>
-            <div>🕐 Hora: <span style="color: #ffd60a;">{hora_chegada}</span></div>
-            <div style="font-size: 0.9em; margin-top: 8px;">📍 Localização registrada</div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.info("ℹ️ Você ainda não fez check-in. Clique no botão para registrar sua chegada!")
+                if resultado.get("sucesso"):
+                    st.success("✅ Check-in realizado com sucesso!")
+                    st.balloons()
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {resultado.get('erro', 'Erro desconhecido')}")
+            else:
+                st.warning("⚠️ Digite o token recebido do admin")
+
+st.divider()
+
+# ========== STATUS DO CHECK-IN ==========
+check_in_atual = get_check_in_usuario(user.id, dia.split()[0])
+
+if check_in_atual:
+    hora_chegada = check_in_atual["hora_chegada"].split("T")[1][:5] if check_in_atual.get("hora_chegada") else "N/A"
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, rgba(6, 168, 125, 0.3), rgba(0, 212, 170, 0.1));
+        border: 2px solid #06a87d;
+        border-radius: 15px;
+        padding: 15px;
+        color: white;
+        text-align: center;
+    ">
+        <div style="font-size: 1.2em; font-weight: 900; color: #06a87d; margin-bottom: 8px;">✅ Check-in Realizado!</div>
+        <div>🕐 Hora: <span style="color: #ffd60a; font-weight: bold;">{hora_chegada}</span></div>
+        <div style="font-size: 0.9em; color: #00d4aa; margin-top: 8px;">✨ Você está confirmado para jogar!</div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.info("ℹ️ Você ainda não fez check-in. Use uma das opções acima para registrar sua chegada!")
+
+st.divider()
 
 
 # =========================
@@ -475,18 +362,18 @@ col1, col2 = st.columns(2)
 
 
 # =========================
-# FILA
-# =========================
+# LISTA DE CONVOCAÇÃO
+# =========================/
 with col1:
     dia_display = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
     limite_display = "18" if dia.split()[0] == "quinta" else "24"
-    st.subheader(f"📋 FILA DE ESPERA {dia_display} 📋")
-    st.caption(f"Limite: {limite_display} pessoas")
+    st.subheader(f"📋 LISTA DE CONVOCAÇÃO {dia_display} 📋")
+    st.caption(f"Total de inscritos: Limite de {limite_display} pessoas")
 
     try:
         fila = listar_fila(dia)
     except Exception as e:
-        st.error(f"❌ Erro ao buscar fila: {e}")
+        st.error(f"❌ Erro ao buscar lista: {e}")
         fila = []
 
     if fila:
@@ -495,14 +382,14 @@ with col1:
             levantador = jogador.get("levantador", False)
             card_jogador(i + 1, nome, levantador=levantador)
     else:
-        st.info("🟡 A fila está vazia! Seja o primeiro a entrar!")
+        st.info("📭 A lista está vazia! Seja o primeiro a se inscrever!")
 
 
 # =========================
-# AÇÕES
+# AÇÕES - INSCREVER
 # =========================
 with col2:
-    st.subheader("⚙️ VAMOS JOGAR ⚙️")
+    st.subheader("✍️ INSCREVER-SE NA LISTA ✍️")
     
     dia_acao = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
     st.caption(f"Preparando para: {dia_acao}")
@@ -510,7 +397,7 @@ with col2:
     nome_escolhido = st.text_input("🎯 Seu nome na lista")
     
     # Pergunta se é levantador
-    eh_levantador = st.checkbox("🤚 Sou levantador")
+    eh_levantador = st.checkbox("🤚 Sou levantador/levantadora")
     limite_lev_str = "4" if dia.split()[0] == "terça" else "3"
     st.caption(f"Limite de levantadores: {limite_lev_str} por dia")
     
@@ -519,18 +406,19 @@ with col2:
     familiares_selecionados = []
     
     if familia_list:
-        st.markdown("**Adicionar familiares à fila:**")
+        st.markdown("**Adicionar familiares à inscrição:**")
         familiares_selecionados = st.multiselect(
-            "Selecione familiares",
+            "Selecione familiares que também vão jogar",
             options=[f"{m['nome']} ({m['idade']} anos)" for m in familia_list],
             key=f"familia_select_{dia}"
         )
+        st.caption(f"Familiares selecionados: {len(familiares_selecionados)}")
 
     # Verifica se a lista foi criada antes de mostrar botão de entrar
     if status_lista_atual is None:
-        st.error("❌ A lista ainda não foi criada por um admin.")
+        st.error("❌ A lista ainda não foi criada por um administrador.")
     elif status_lista_atual:
-        if st.button("➕ ENTRAR NA FILA"):
+        if st.button("✅ INSCREVER NA LISTA", use_container_width=True, key="inscrever_btn"):
             if not nome_escolhido:
                 st.warning("⚠️ Digite um nome para continuar!")
             else:
@@ -545,7 +433,7 @@ with col2:
                         total_com_existentes = len(pessoas_usuario) + total_pessoas_selecionadas
                         
                         if total_com_existentes > 2:
-                            st.error(f"❌ Limite excedido! Você pode adicionar no máximo 2 pessoas por dia. Você já tem {len(pessoas_usuario)} pessoa(s) e quer adicionar {total_pessoas_selecionadas}.")
+                            st.error(f"❌ Limite excedido! Você pode inscrever no máximo 2 pessoas por dia. Você já tem {len(pessoas_usuario)} pessoa(s) e quer adicionar {total_pessoas_selecionadas}.")
                         else:
                             # Adiciona o usuário na fila
                             res = entrar_fila(user.id, nome_escolhido, dia, levantador=eh_levantador)
@@ -563,9 +451,10 @@ with col2:
                                                 entrar_fila(user.id, membro['nome'], dia, levantador=False)
                                             except Exception as e:
                                                 erro_familiares = True
-                                                st.warning(f"⚠️ Erro ao adicionar {membro['nome']}: {e}")
+                                                st.warning(f"⚠️ Erro ao inscrever {membro['nome']}: {e}")
                                 
-                                st.success("✅ Você entrou na fila! Boa sorte!")
+                                total_inscrito = 1 + len(familiares_selecionados)
+                                st.success(f"✅ {total_inscrito} pessoa(s) inscrita(s) com sucesso na lista de convocação! Boa sorte!")
                                 
                                 # Registra entrada na fila para o score
                                 try:
@@ -591,7 +480,8 @@ with col2:
                                         except:
                                             pass
                             
-                            st.success("✅ Você entrou na fila! Boa sorte!")
+                            total_inscrito_admin = 1 + len(familiares_selecionados)
+                            st.success(f"✅ {total_inscrito_admin} pessoa(s) inscrita(s) na lista de convocação!")
                             
                             # Registra entrada na fila para o score (admin)
                             try:
