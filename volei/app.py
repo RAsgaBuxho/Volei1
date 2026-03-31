@@ -674,19 +674,15 @@ if is_admin_user:
     st.divider()
 
 # =========================
-# RANKING GERAL
+# SORTEIO DE TIMES
 # =========================
 st.markdown("---")
-st.subheader("🏆 RANKING GERAL 🏆")
+st.subheader("🎲 SORTEIO DE TIMES 🎲")
 
-st.markdown("""
-**Ranking baseado em:**
-- ✅ Check-ins confirmados
-- 📊 Taxa de presença (check-ins / entradas na fila)
-- 🎯 Atividade recente
+dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
+st.markdown(f"**Sorteios para: {dia_titulo}**")
 
-**Objetivo:** Valorizar quem entra na fila E realmente comparece!
-""")
+col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
 
 with col_sorteio2:
     if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear"):
@@ -839,45 +835,80 @@ dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇ
 st.markdown(f"**Sorteios para: {dia_titulo}**")
 
 col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
+
+with col_sorteio2:
+    if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear"):
+        try:
+            st.session_state.times = gerar_times(dia)
+            st.balloons()
+        except Exception as e:
+            st.error(f"❌ Erro ao gerar times: {e}")
+
+# =========================
+# EXIBIR TIMES
+# =========================
+if st.session_state.times:
+    times = st.session_state.times
     
-    with col1:
-        st.metric("🥇 Melhor Score", f"{ranking[0]['score']} pts", f"{ranking[0]['nome']}", delta_color="off")
-    
-    with col2:
-        if len(ranking) > 1:
-            st.metric("🥈 2º Lugar", f"{ranking[1]['score']} pts", f"{ranking[1]['nome']}", delta_color="off")
-        else:
-            st.metric("🥈 2º Lugar", "---", delta_color="off")
-    
-    with col3:
-        if len(ranking) > 2:
-            st.metric("🥉 3º Lugar", f"{ranking[2]['score']} pts", f"{ranking[2]['nome']}", delta_color="off")
-        else:
-            st.metric("🥉 3º Lugar", "---", delta_color="off")
-    
+    if isinstance(times, dict):
+        st.error(f"❌ {times.get('error', 'Erro ao gerar times')}")
+    else:
+        st.markdown("---")
+        st.subheader(f"🏟️ TIMES FORMADOS 🏟️")
+        
+        for i in range(0, len(times), 2):
+            if i + 1 < len(times):
+                desenhar_quadra(times[i], times[i + 1])
+            else:
+                st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, rgba(51, 65, 85, 0.6), rgba(30, 41, 59, 0.6));
+                    border: 2px solid #ffd60a;
+                    border-radius: 18px;
+                    padding: 20px;
+                    color: white;
+                    font-weight: 700;
+                ">
+                    <h3 style="color: #ffd60a; text-align: center;">🏐 Time Extra 🏐</h3>
+                """, unsafe_allow_html=True)
+                for jogador in times[i]:
+                    st.write(f"🎯 {jogador}")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+st.divider()
+
+# =========================
+# PRESENÇA & CHECK-INS
+# =========================
+st.markdown("---")
+st.subheader("📊 PRESENÇA & CHECK-INS 📊")
+
+dia_clean = dia.split()[0]
+check_ins_validados = listar_check_ins_validados(dia_clean, raio_metros=50)
+lista_presenca(check_ins_validados)
+
+# Admin: Seção de usuários cadastrados
+if is_admin(user.id):
     st.divider()
+    st.subheader("👥 USUÁRIOS CADASTRADOS 👥")
     
-    # Tabela completa do ranking
-    st.markdown("**📋 TOP 10 RANKING:**")
-    
-    for i, jogador in enumerate(ranking[:10], 1):
-        medalha = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}️⃣ "
+    try:
+        total_usuarios = obter_total_usuarios()
+        st.metric("Total de Usuários", total_usuarios)
         
-        col_rank1, col_rank2, col_rank3, col_rank4, col_rank5 = st.columns([0.5, 2, 1.5, 1.5, 1])
-        
-        with col_rank1:
-            st.markdown(f"**{medalha}**")
-        
-        with col_rank2:
-            st.markdown(f"**{jogador['nome']}**")
-        
-        with col_rank3:
-            st.markdown(f"✅ {jogador['check_ins']} check-ins")
-        
-        with col_rank4:
-            st.markdown(f"📊 {jogador['taxa_presenca']:.0f}% presença")
-        
-        with col_rank5:
-            st.markdown(f"⭐ {jogador['score']} pts", help="Score total")
-else:
-    st.info("📈 Nenhum jogador com score ainda. Comece a jogar e fazer check-ins!")
+        with st.expander("📋 Ver Lista de Usuários"):
+            usuarios_lista = listar_usuarios()
+            if usuarios_lista:
+                for idx, usr in enumerate(usuarios_lista, 1):
+                    col1, col2, col3 = st.columns([2, 2, 1])
+                    with col1:
+                        st.write(f"**{usr['nome']}**")
+                    with col2:
+                        st.write(f"📧 {usr['email']}")
+                    with col3:
+                        if usr['telefone']:
+                            st.write(f"☎️ {usr['telefone']}")
+            else:
+                st.info("Nenhum usuário cadastrado ainda")
+    except Exception as e:
+        st.warning(f"⚠️ Erro ao carregar usuários: {e}\n\nExecute SETUP_USUARIOS.sql no Supabase")
