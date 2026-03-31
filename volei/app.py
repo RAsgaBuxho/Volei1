@@ -321,16 +321,159 @@ else:
 st.divider()
 
 # =========================
+# INSCRIÇÃO NA LISTA
+# =========================
+st.markdown("---")
+st.subheader("✍️ INSCREVER-SE NA LISTA ✍️")
+
+if status_lista_atual is None:
+    st.error("❌ A lista para este dia ainda não foi criada por um administrador. Aguarde...")
+elif not status_lista_atual:
+    st.error("🔒 A lista está FECHADA. Não é possível fazer novas inscrições.")
+else:
+    # Adicionar imagem da águia
+    if aguia_existe:
+        col_img1, col_img2, col_img3 = st.columns([1, 1, 1])
+        with col_img2:
+            st.image(aguia_path, width=250)
+    
+    dia_acao = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
+    st.caption(f"Preparando para: {dia_acao}")
+
+    col_form1, col_form2 = st.columns(2)
+    
+    with col_form1:
+        nome_escolhido = st.text_input("🎯 Seu nome na lista", value=nome_usuario)
+        eh_levantador = st.checkbox("🤚 Sou levantador/levantadora")
+    
+    with col_form2:
+        limite_lev_str = "4" if dia.split()[0] == "terça" else "3"
+        st.markdown(f"**Limite de levantadores:** {limite_lev_str}")
+        st.markdown("")  # Espaço
+    
+    # Opção para adicionar familiares
+    familia_list = listar_familia(user.id).data if listar_familia(user.id).data else []
+    familiares_selecionados = []
+    
+    if familia_list:
+        st.markdown("**👥 Adicionar familiares à inscrição:**")
+        familiares_selecionados = st.multiselect(
+            "Selecione familiares que também vão jogar",
+            options=[f"{m['nome']} ({m['idade']} anos)" for m in familia_list],
+            key=f"familia_select_{dia}"
+        )
+    
+    # Botão para inscrição
+    col_btn1, col_btn2 = st.columns([3, 1])
+    with col_btn1:
+        if st.button("➕ INSCREVER-SE AGORA", use_container_width=True, key="inscrever_btn"):
+            if not nome_escolhido:
+                st.error("❌ Digite seu nome para se inscrever!")
+            else:
+                try:
+                    is_admin_user = is_admin(user.id)
+                    if not is_admin_user:
+                        fila_atual = listar_fila(dia)
+                        pessoas_usuario = [p for p in fila_atual if p.get("user_id") == user.id]
+                        total_pessoas_selecionadas = 1 + len(familiares_selecionados)
+                        total_com_existentes = len(pessoas_usuario) + total_pessoas_selecionadas
+                        
+                        if total_com_existentes > 2:
+                            st.error(f"❌ Limite excedido! Máx 2 pessoas por dia.")
+                        else:
+                            res = entrar_fila(user.id, nome_escolhido, dia, levantador=eh_levantador)
+                            if isinstance(res, dict) and res.get("error"):
+                                st.error(f"❌ {res['error']}")
+                            else:
+                                if familiares_selecionados and familia_list:
+                                    for fam_selecionado in familiares_selecionados:
+                                        membro = next((m for m in familia_list if f"{m['nome']} ({m['idade']} anos)" == fam_selecionado), None)
+                                        if membro:
+                                            try:
+                                                entrar_fila(user.id, membro['nome'], dia, levantador=False)
+                                            except:
+                                                pass
+                                
+                                total_inscrito = 1 + len(familiares_selecionados)
+                                st.success(f"✅ {total_inscrito} pessoa(s) inscrita(s) com sucesso!")
+                                try:
+                                    registrar_entrada_fila(user.id, nome_escolhido, email_user)
+                                except:
+                                    pass
+                                st.rerun()
+                    else:
+                        res = entrar_fila(user.id, nome_escolhido, dia, levantador=eh_levantador)
+                        if isinstance(res, dict) and res.get("error"):
+                            st.error(f"❌ {res['error']}")
+                        else:
+                            if familiares_selecionados and familia_list:
+                                for fam_selecionado in familiares_selecionados:
+                                    membro = next((m for m in familia_list if f"{m['nome']} ({m['idade']} anos)" == fam_selecionado), None)
+                                    if membro:
+                                        try:
+                                            entrar_fila(user.id, membro['nome'], dia, levantador=False)
+                                        except:
+                                            pass
+                            
+                            total_inscrito = 1 + len(familiares_selecionados)
+                            st.success(f"✅ {total_inscrito} pessoa(s) inscrita(s)!")
+                            try:
+                                registrar_entrada_fila(user.id, nome_escolhido, email_user)
+                            except:
+                                pass
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro: {e}")
+    
+    with col_btn2:
+        if st.button("❌ SAIR", use_container_width=True):
+            try:
+                sair_fila(user.id, dia)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro: {e}")
+
+st.divider()
+
+# =========================
+# LISTA DE CONVOCAÇÃO
+# =========================
+st.markdown("---")
+st.subheader("📋 LISTA DE CONVOCAÇÃO 📋")
+
+dia_display = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
+limite_display = "18" if dia.split()[0] == "quinta" else "24"
+st.markdown(f"**{dia_display} - Limite de {limite_display} pessoas**")
+
+try:
+    fila = listar_fila(dia)
+except Exception as e:
+    st.error(f"❌ Erro ao buscar lista: {e}")
+    fila = []
+
+if fila:
+    # Mostrar em cards lado a lado (2 colunas)
+    cols = st.columns(2)
+    for i, jogador in enumerate(fila):
+        nome = jogador["nome"]
+        levantador = jogador.get("levantador", False)
+        with cols[i % 2]:
+            card_jogador(i + 1, nome, levantador=levantador)
+else:
+    st.info("📭 A lista está vazia! Seja o primeiro a se inscrever!")
+
+st.divider()
+
+# =========================
 # CHECK-IN
 # =========================
 st.markdown("---")
 st.subheader("📍 CHECK-IN DE CHEGADA 📍")
-st.caption("Registre sua chegada para confirmar sua presença")
+st.markdown("Registre sua chegada para confirmar sua presença")
 
-# Verificar se é admin
 is_admin_user = is_admin(user.id)
 
-# ========== ADMIN: GERAR QR CODE ==========
+# ADMIN: Gerar QR Code
 if is_admin_user:
     if QRCODE_DISPONIVEL:
         with st.expander("🔐 ADMIN - Gerar QR Code para Check-in", expanded=False):
@@ -350,63 +493,48 @@ if is_admin_user:
                     ">
                         <div style="color: #06a87d; font-weight: 900; margin-bottom: 10px;">✅ QR Code Gerado!</div>
                         <div style="font-size: 0.9em; color: #00d4aa;">Token: <code>{resultado.get('token')}</code></div>
-                        <div style="font-size: 0.85em; color: #e39a03; margin-top: 8px;">Compartilhe este QR code com os jogadores</div>
+                        <div style="font-size: 0.85em; color: #e39a03; margin-top: 8px;">Compartilhe com os jogadores</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    # Exibir QR Code
                     st.image(resultado.get("img_bytes"), width=300, caption="Escaneie para fazer check-in")
                 else:
-                    st.error(f"❌ Erro ao gerar QR Code: {resultado.get('erro', 'Desconhecido')}")
+                    st.error(f"❌ Erro: {resultado.get('erro', 'Desconhecido')}")
     else:
-        st.info("ℹ️ Sistema de QR Code não disponível neste momento")
+        st.info("ℹ️ Sistema de QR Code não disponível")
 
-st.divider()
+st.markdown("---")
+st.markdown("**Opções de Check-in:**")
 
-# ========== USUÁRIO: FAZER CHECK-IN ==========
-col_checkin_auto, col_checkin_qr = st.columns(2)
+col_checkin1, col_checkin2 = st.columns(2)
 
-# Coluna 1: Check-in Automático
-with col_checkin_auto:
-    st.markdown("**Opção 1: Automático com Geolocalização**")
-    st.markdown("Clique no botão para usar seu GPS:")
+with col_checkin1:
+    st.markdown("#### 1️⃣ Geolocalização (Automático)")
     botao_check_in()
 
-# Coluna 2: Check-in via QR Code
-with col_checkin_qr:
+with col_checkin2:
     if QRCODE_DISPONIVEL:
-        st.markdown("**Opção 2: Escanear QR Code**")
-        st.markdown("Se a geolocalização não funcionar, o admin pode gerar um QR Code")
-        
+        st.markdown("#### 2️⃣ QR Code (Se GPS não funcionar)")
         if st.button("📱 ESCANEAR QR CODE", use_container_width=True, key="escanear_qr"):
             st.session_state.modo_qr = True
         
         if st.session_state.get("modo_qr"):
-            st.info("📱 Abra a câmera do telefone ou use um leitor de QR Code")
-            st.warning("⚠️ Funcionalidade em desenvolvimento - entre em contato com o admin")
-            
-            # Campo para inserir manualmente o token (fallback)
-            token_manual = st.text_input("Ou cole o token manualmente:", key="token_qr_input")
-            
-            if st.button("✅ CONFIRMAR CHECK-IN COM TOKEN", use_container_width=True):
+            token_manual = st.text_input("Cole o token do admin:", key="token_qr_input")
+            if st.button("✅ CONFIRMAR", use_container_width=True):
                 if token_manual:
                     resultado = fazer_checkin_por_qrcode(user.id, token_manual, dia.split()[0])
-                    
                     if resultado.get("sucesso"):
-                        st.success("✅ Check-in realizado com sucesso!")
+                        st.success("✅ Check-in realizado!")
                         st.balloons()
                         time.sleep(2)
                         st.rerun()
                     else:
-                        st.error(f"❌ {resultado.get('erro', 'Erro desconhecido')}")
+                        st.error(f"❌ {resultado.get('erro')}")
                 else:
-                    st.warning("⚠️ Digite o token recebido do admin")
+                    st.warning("⚠️ Digite o token")
     else:
-        st.info("ℹ️ Sistema de QR Code não disponível neste momento")
+        st.info("ℹ️ QR Code não disponível")
 
-st.divider()
-
-# ========== STATUS DO CHECK-IN ==========
+# Status do Check-in
 check_in_atual = get_check_in_usuario(user.id, dia.split()[0])
 
 if check_in_atual:
@@ -419,6 +547,7 @@ if check_in_atual:
         padding: 15px;
         color: white;
         text-align: center;
+        margin-top: 15px;
     ">
         <div style="font-size: 1.2em; font-weight: 900; color: #06a87d; margin-bottom: 8px;">✅ Check-in Realizado!</div>
         <div>🕐 Hora: <span style="color: #ffd60a; font-weight: bold;">{hora_chegada}</span></div>
@@ -426,327 +555,159 @@ if check_in_atual:
     </div>
     """, unsafe_allow_html=True)
 else:
-    st.info("ℹ️ Você ainda não fez check-in. Use uma das opções acima para registrar sua chegada!")
+    st.info("ℹ️ Você ainda não fez check-in")
 
 st.divider()
 
-
 # =========================
-# LAYOUT
+# PAINEL DO ADMIN (APENAS ADMINS)
 # =========================
-col1, col2 = st.columns(2)
-
-
-# =========================
-# LISTA DE CONVOCAÇÃO
-# =========================/
-with col1:
-    # Adicionar imagem da águia no topo
-    if aguia_existe:
-        st.image(aguia_path, width=280, use_column_width=False)
+if is_admin_user:
+    st.markdown("---")
+    st.subheader("🔐 PAINEL DO ADMINISTRADOR 🔐")
     
-    dia_display = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-    limite_display = "18" if dia.split()[0] == "quinta" else "24"
-    st.subheader(f"📋 LISTA DE CONVOCAÇÃO {dia_display} 📋")
-    st.caption(f"Total de inscritos: Limite de {limite_display} pessoas")
-
-    try:
-        fila = listar_fila(dia)
-    except Exception as e:
-        st.error(f"❌ Erro ao buscar lista: {e}")
-        fila = []
-
-    if fila:
-        for i, jogador in enumerate(fila):
-            nome = jogador["nome"]
-            levantador = jogador.get("levantador", False)
-            card_jogador(i + 1, nome, levantador=levantador)
-    else:
-        st.info("📭 A lista está vazia! Seja o primeiro a se inscrever!")
-
-
-# =========================
-# AÇÕES - INSCREVER
-# =========================
-with col2:
-    # Adicionar imagem da águia no topo
-    if aguia_existe:
-        st.image(aguia_path, width=300, use_column_width=False)
+    # Seção 1: Gerenciar Lista
+    st.markdown("#### ➕ Gerenciar Lista")
+    col_admin1, col_admin2, col_admin3 = st.columns(3)
     
-    st.subheader("✍️ INSCREVER-SE NA LISTA ✍️")
-    
-    dia_acao = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-    st.caption(f"Preparando para: {dia_acao}")
-
-    nome_escolhido = st.text_input("🎯 Seu nome na lista", value=nome_usuario)
-    
-    # Pergunta se é levantador
-    eh_levantador = st.checkbox("🤚 Sou levantador/levantadora")
-    limite_lev_str = "4" if dia.split()[0] == "terça" else "3"
-    st.caption(f"Limite de levantadores: {limite_lev_str} por dia")
-    
-    # Opção para adicionar familiares
-    familia_list = listar_familia(user.id).data if listar_familia(user.id).data else []
-    familiares_selecionados = []
-    
-    if familia_list:
-        st.markdown("**Adicionar familiares à inscrição:**")
-        familiares_selecionados = st.multiselect(
-            "Selecione familiares que também vão jogar",
-            options=[f"{m['nome']} ({m['idade']} anos)" for m in familia_list],
-            key=f"familia_select_{dia}"
-        )
-        st.caption(f"Familiares selecionados: {len(familiares_selecionados)}")
-
-    # Verifica se a lista foi criada antes de mostrar botão de entrar
-    if status_lista_atual is None:
-        st.error("❌ A lista ainda não foi criada por um administrador.")
-    elif status_lista_atual:
-        if st.button("✅ INSCREVER NA LISTA", use_container_width=True, key="inscrever_btn"):
-            if not nome_escolhido:
-                st.warning("⚠️ Digite um nome para continuar!")
-            else:
-                try:
-                    # Validar limite de pessoas para o usuário
-                    is_admin_user = is_admin(user.id)
-                    if not is_admin_user:
-                        # Contar quantas pessoas o usuário já tem na fila
-                        fila_atual = listar_fila(dia)
-                        pessoas_usuario = [p for p in fila_atual if p.get("user_id") == user.id]
-                        total_pessoas_selecionadas = 1 + len(familiares_selecionados)
-                        total_com_existentes = len(pessoas_usuario) + total_pessoas_selecionadas
-                        
-                        if total_com_existentes > 2:
-                            st.error(f"❌ Limite excedido! Você pode inscrever no máximo 2 pessoas por dia. Você já tem {len(pessoas_usuario)} pessoa(s) e quer adicionar {total_pessoas_selecionadas}.")
-                        else:
-                            # Adiciona o usuário na fila
-                            res = entrar_fila(user.id, nome_escolhido, dia, levantador=eh_levantador)
-
-                            if isinstance(res, dict) and res.get("error"):
-                                st.error(f"❌ {res['error']}")
-                            else:
-                                # Adiciona familiares à fila também
-                                if familiares_selecionados and familia_list:
-                                    erro_familiares = False
-                                    for fam_selecionado in familiares_selecionados:
-                                        membro = next((m for m in familia_list if f"{m['nome']} ({m['idade']} anos)" == fam_selecionado), None)
-                                        if membro:
-                                            try:
-                                                entrar_fila(user.id, membro['nome'], dia, levantador=False)
-                                            except Exception as e:
-                                                erro_familiares = True
-                                                st.warning(f"⚠️ Erro ao inscrever {membro['nome']}: {e}")
-                                
-                                total_inscrito = 1 + len(familiares_selecionados)
-                                st.success(f"✅ {total_inscrito} pessoa(s) inscrita(s) com sucesso na lista de convocação! Boa sorte!")
-                                
-                                # Registra entrada na fila para o score
-                                try:
-                                    registrar_entrada_fila(user.id, nome_escolhido, email_user)
-                                except:
-                                    pass
-                                
-                                st.rerun()
-                    else:
-                        # Admin pode adicionar ilimitadamente
-                        res = entrar_fila(user.id, nome_escolhido, dia, levantador=eh_levantador)
-
-                        if isinstance(res, dict) and res.get("error"):
-                            st.error(f"❌ {res['error']}")
-                        else:
-                            # Adiciona familiares à fila também
-                            if familiares_selecionados and familia_list:
-                                for fam_selecionado in familiares_selecionados:
-                                    membro = next((m for m in familia_list if f"{m['nome']} ({m['idade']} anos)" == fam_selecionado), None)
-                                    if membro:
-                                        try:
-                                            entrar_fila(user.id, membro['nome'], dia, levantador=False)
-                                        except:
-                                            pass
-                            
-                            total_inscrito_admin = 1 + len(familiares_selecionados)
-                            st.success(f"✅ {total_inscrito_admin} pessoa(s) inscrita(s) na lista de convocação!")
-                            
-                            # Registra entrada na fila para o score (admin)
-                            try:
-                                registrar_entrada_fila(user.id, nome_escolhido, email_user)
-                            except:
-                                pass
-                            
-                            st.rerun()
-
-                except Exception as e:
-                    st.error(f"❌ Erro ao entrar: {e}")
-
-    if st.button("❌ SAIR DA FILA"):
-        try:
-            sair_fila(user.id, dia)
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ Erro ao sair: {e}")
-
-    st.divider()
-
-    # ADMIN SIMPLES
-    if is_admin(user.id):
-        st.markdown("**🔐 PAINEL DO ADMIN 🔐**")
-
-        # Botão para CRIAR LISTA (se ainda não foi criada)
+    with col_admin1:
         if status_lista_atual is None:
-            if st.button("➕ CRIAR LISTA"):
+            if st.button("➕ CRIAR LISTA", use_container_width=True):
                 try:
                     criar_lista(dia_key)
-                    st.success(f"✅ Lista para {dia} foi criada!")
+                    st.success(f"✅ Lista criada!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Erro ao criar lista: {e}")
+                    st.error(f"❌ Erro: {e}")
         else:
-            st.info(f"ℹ️ Lista já foi criada ({('Aberta' if status_lista_atual else 'Fechada')})")
-
-        # Botão para FECHAR LISTA
+            st.info(f"✓ Lista: {'Aberta' if status_lista_atual else 'Fechada'}")
+    
+    with col_admin2:
         if status_lista_atual:
-            if st.button("🔒 FECHAR LISTA"):
+            if st.button("🔒 FECHAR LISTA", use_container_width=True):
                 try:
                     fechar_lista(dia_key)
-                    
-                    # Automaticamente adiciona convidados quando fecha a lista
                     try:
                         resultado = preencher_fila_com_convidados(dia)
                         if resultado['success'] and resultado['adicionados'] > 0:
-                            st.info(f"✅ {resultado['adicionados']} convidado(s) adicionado(s) à fila!")
-                    except Exception as e:
-                        st.warning(f"⚠️ Erro ao adicionar convidados: {e}")
-                    
+                            st.info(f"✅ {resultado['adicionados']} convidado(s) adicionados!")
+                    except:
+                        pass
                     st.success("✅ Lista fechada!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Erro ao fechar lista: {e}")
-            
-            st.rerun()
-
-        if st.button("🧹 LIMPAR FILA"):
+                    st.error(f"❌ Erro: {e}")
+    
+    with col_admin3:
+        if st.button("🧹 LIMPAR FILA", use_container_width=True):
             try:
                 limpar_fila(dia)
                 st.session_state.times = None
-                st.success("✅ Fila limpa com sucesso!")
+                st.success("✅ Fila limpa!")
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ Erro ao limpar: {e}")
-        
-        # Seção de Convidados
-        st.divider()
-        st.markdown("**👥 GERENCIAR CONVIDADOS 👥**")
-        
-        convidados = listar_convidados(dia)
-        limite = 24 if dia.split()[0] == "terça" else 18
-        fila_atual = listar_fila(dia)
-        vagas = limite - len(fila_atual)
-        
-        st.caption(f"Vagas disponíveis: {vagas} | Convidados pendentes: {len(convidados)}")
-        
-        col_cong1, col_cong2 = st.columns(2)
-        
-        with col_cong1:
-            st.markdown("**Convidados aguardando vaga:**")
-            if convidados:
-                for i, convidado in enumerate(convidados):
-                    st.write(f"{i+1}. {convidado['nome']} 👤")
+                st.error(f"❌ Erro: {e}")
+    
+    st.divider()
+    
+    # Seção 2: Convidados
+    st.markdown("#### 👥 Gerenciar Convidados")
+    
+    convidados = listar_convidados(dia)
+    limite = 24 if dia.split()[0] == "terça" else 18
+    fila_atual = listar_fila(dia)
+    vagas = limite - len(fila_atual)
+    
+    col_cong1, col_cong2 = st.columns(2)
+    
+    with col_cong1:
+        st.markdown(f"**Vagas:** {vagas} | **Convidados:** {len(convidados)}")
+        if convidados:
+            for i, convidado in enumerate(convidados):
+                st.markdown(f"• {convidado['nome']}")
+        else:
+            st.info("Nenhum convidado")
+    
+    with col_cong2:
+        st.markdown("**Adicionar:**")
+        nome_convidado = st.text_input("Nome", key="nome_convidado")
+        if st.button("➕ ADICIONAR", use_container_width=True):
+            if nome_convidado:
+                try:
+                    adicionar_convidado(nome_convidado, dia)
+                    st.success(f"✅ {nome_convidado} adicionado!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro: {e}")
             else:
-                st.info("ℹ️ Nenhum convidado na espera")
-        
-        with col_cong2:
-            st.markdown("**Adicionar novo convidado:**")
-            nome_convidado = st.text_input("Nome do convidado", key="nome_convidado")
-            
-            if st.button("➕ ADICIONAR CONVIDADO", use_container_width=True):
-                if nome_convidado:
-                    try:
-                        adicionar_convidado(nome_convidado, dia)
-                        st.success(f"✅ {nome_convidado} adicionado à lista de convidados!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao adicionar: {e}")
-                else:
-                    st.warning("⚠️ Digite o nome do convidado!")
-        
-        # Informações sobre economia de espaço
-        st.divider()
-        st.markdown("**💾 ECONOMIA DE ESPAÇO 💾**")
-        
-        col_info1, col_info2 = st.columns(2)
-        
-        with col_info1:
-            fila_atual_count = contar_fila(dia)
-            st.metric("Pessoas na fila (hoje)", fila_atual_count, delta="máx: 24" if dia.split()[0] == "terça" else "máx: 18")
-            
-            # Mostrar levantadores
-            fila_com_levantadores = listar_fila(dia)
-            total_levantadores = len([p for p in fila_com_levantadores if p.get("levantador", False)])
-            limite_lev = 4 if dia.split()[0] == "terça" else 3
-            st.metric("🤚 Levantadores", total_levantadores, delta=f"máx: {limite_lev}")
-        
-        with col_info2:
-            st.markdown("""
-            **🗑️ Limpeza Automática:**
-            - Filas: deletadas após 3 dias
-            - Check-ins: deletados após 7 dias
-            
-            ✅ Economiza espaço no banco (versão gratuita)
-            """)
-        
-        # Botão para forçar limpeza manual
-        if st.button("🧹 FORÇAR LIMPEZA MANUAL AGORA", use_container_width=True):
+                st.warning("⚠️ Digite um nome!")
+    
+    st.divider()
+    
+    # Seção 3: Estatísticas
+    st.markdown("#### 📊 Estatísticas")
+    
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    
+    with col_stat1:
+        fila_count = contar_fila(dia)
+        limite_str = "24" if dia.split()[0] == "terça" else "18"
+        st.metric("Inscritos", f"{fila_count}/{limite_str}")
+    
+    with col_stat2:
+        fila_com_lev = listar_fila(dia)
+        total_lev = len([p for p in fila_com_lev if p.get("levantador", False)])
+        limite_lev = "4" if dia.split()[0] == "terça" else "3"
+        st.metric("🤚 Levantadores", f"{total_lev}/{limite_lev}")
+    
+    with col_stat3:
+        if st.button("🧹 Limpeza Manual", use_container_width=True):
             try:
-                res_fila = limpar_fila_antigas()
-                res_check = limpar_check_ins_antigos(dias=7)
-                res_scores = limpar_scores_inativos(dias=90)
-                
-                msg = f"✅ Limpeza concluída!\n\n"
-                if res_fila['success']:
-                    msg += f"🗂️ Fila: {res_fila['deletados']} registro(s) deletado(s)\n"
-                if res_check['success']:
-                    msg += f"📍 Check-ins: {res_check['deletados']} registro(s) deletado(s)\n"
-                if res_scores['success']:
-                    msg += f"🏆 Scores: {res_scores['deletados']} jogador(es) inativo(s) removido(s)"
-                
-                st.success(msg)
+                limpar_fila_antigas()
+                limpar_check_ins_antigos(dias=7)
+                limpar_scores_inativos(dias=90)
+                st.success("✅ Limpeza concluída!")
+                st.rerun()
             except Exception as e:
-                st.error(f"❌ Erro na limpeza: {e}")
-
+                st.error(f"❌ Erro: {e}")
+    
+    st.divider()
 
 # =========================
-# GERAR TIMES
+# RANKING GERAL
 # =========================
-st.divider()
+st.markdown("---")
+st.subheader("🏆 RANKING GERAL 🏆")
 
-dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-st.markdown(f"### 🎯 Sorteio para {dia_titulo}")
+st.markdown("""
+**Ranking baseado em:**
+- ✅ Check-ins confirmados
+- 📊 Taxa de presença (check-ins / entradas na fila)
+- 🎯 Atividade recente
 
-col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
+**Objetivo:** Valorizar quem entra na fila E realmente comparece!
+""")
 
 with col_sorteio2:
-    if st.button("🎲 SORTEAR TIMES AGORA 🎲", key="sortear"):
+    if st.button("🎲 SORTEAR TIMES AGORA 🎲", use_container_width=True, key="sortear"):
         try:
             st.session_state.times = gerar_times(dia)
             st.balloons()
         except Exception as e:
             st.error(f"❌ Erro ao gerar times: {e}")
 
-
 # =========================
 # EXIBIR TIMES
 # =========================
 if st.session_state.times:
-
     times = st.session_state.times
-
+    
     if isinstance(times, dict):
         st.error(f"❌ {times.get('error', 'Erro ao gerar times')}")
     else:
         st.markdown("---")
-        dia_times = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
-        st.subheader(f"🏟️ TIMES FORMADOS {dia_times} 🏟️")
-
+        st.subheader(f"🏟️ TIMES FORMADOS 🏟️")
+        
         for i in range(0, len(times), 2):
             if i + 1 < len(times):
                 desenhar_quadra(times[i], times[i + 1])
@@ -766,18 +727,15 @@ if st.session_state.times:
                     st.write(f"🎯 {jogador}")
                 st.markdown("</div>", unsafe_allow_html=True)
 
-
-# =========================
-# PRESENÇA
-# =========================
 st.divider()
 
-# Extrai o dia (terça ou quinta)
+# =========================
+# PRESENÇA & CHECK-INS
+# =========================
+st.markdown("---")
+st.subheader("📊 PRESENÇA & CHECK-INS 📊")
+
 dia_clean = dia.split()[0]
-dia_presenca = "🔵 REI DA QUADRA" if dia_clean == "quinta" else "🔴 TERÇA-FEIRA"
-
-st.subheader(f"📊 PRESENÇA & CHECK-INS {dia_presenca} 📊")
-
 check_ins_validados = listar_check_ins_validados(dia_clean, raio_metros=50)
 lista_presenca(check_ins_validados)
 
@@ -827,6 +785,60 @@ ranking = listar_ranking(limite=10)
 
 if ranking:
     col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("🥇 Melhor Score", f"{ranking[0]['score']} pts", f"{ranking[0]['nome']}", delta_color="off")
+    
+    with col2:
+        if len(ranking) > 1:
+            st.metric("🥈 2º Lugar", f"{ranking[1]['score']} pts", f"{ranking[1]['nome']}", delta_color="off")
+        else:
+            st.metric("🥈 2º Lugar", "---", delta_color="off")
+    
+    with col3:
+        if len(ranking) > 2:
+            st.metric("🥉 3º Lugar", f"{ranking[2]['score']} pts", f"{ranking[2]['nome']}", delta_color="off")
+        else:
+            st.metric("🥉 3º Lugar", "---", delta_color="off")
+    
+    st.divider()
+    
+    st.markdown("**📋 TOP 10 RANKING:**")
+    
+    for i, jogador in enumerate(ranking[:10], 1):
+        medalha = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}️⃣ "
+        
+        col_rank1, col_rank2, col_rank3, col_rank4, col_rank5 = st.columns([0.5, 2, 1.5, 1.5, 1])
+        
+        with col_rank1:
+            st.markdown(f"**{medalha}**")
+        
+        with col_rank2:
+            st.markdown(f"**{jogador['nome']}**")
+        
+        with col_rank3:
+            st.markdown(f"✅ {jogador['check_ins']} check-ins")
+        
+        with col_rank4:
+            st.markdown(f"📊 {jogador['taxa_presenca']:.0f}% presença")
+        
+        with col_rank5:
+            st.markdown(f"⭐ {jogador['score']} pts", help="Score total")
+else:
+    st.info("📈 Nenhum jogador com score ainda. Comece a jogar e fazer check-ins!")
+
+st.divider()
+
+# =========================
+# SORTEIO DE TIMES
+# =========================
+st.markdown("---")
+st.subheader("🎲 SORTEIO DE TIMES 🎲")
+
+dia_titulo = "🔵 REI DA QUADRA" if dia.split()[0] == "quinta" else "🔴 TERÇA-FEIRA"
+st.markdown(f"**Sorteios para: {dia_titulo}**")
+
+col_sorteio1, col_sorteio2, col_sorteio3 = st.columns([1, 2, 1])
     
     with col1:
         st.metric("🥇 Melhor Score", f"{ranking[0]['score']} pts", f"{ranking[0]['nome']}", delta_color="off")
